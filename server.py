@@ -64,6 +64,7 @@ def application(environ, start_response):
                 pass
             if params[1] == 'GET':
                 dict_res = collection.find_one()
+                print(dict_res)
                 del dict_res['_id']
                 json_str_res = json_util.dumps(dict_res)
             if params[1] == 'PUT':
