@@ -3,8 +3,9 @@ from wsgiref.simple_server import make_server
 from spider import Spider
 import json
 import re
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from bson import json_util
+from bson.objectid import ObjectId
 
 def setHeaders():
     headers = {'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
@@ -19,11 +20,18 @@ def spider(url, method, data = None, headers = None):
 
 def getParams(environ):
     method = environ['REQUEST_METHOD']
+    print(method)
     if method == 'POST' or method == 'PUT':
         request_body_size = int(environ['CONTENT_LENGTH'])
         request_body = environ['wsgi.input'].read(request_body_size)
-        d = json.loads(request_body)
-    elif method == 'GET' or method == 'DELETE':
+        str_request_body = str(request_body, encoding = "utf-8")
+        if re.search(r'url', str_request_body):
+            d = json.loads(str_request_body)
+        else:
+            d = parse_qs(str_request_body)
+            for query in d:
+              d[query] = d[query][0]
+    elif method == 'GET' or method == 'DELETE' or method == 'OPTIONS':
         d = parse_qs(environ['QUERY_STRING'])
         for query in d:
             d[query] = d[query][0]
@@ -35,10 +43,18 @@ def getArticle(type):
 def handleData(dict_data):
     response_json = json.dumps(dict_data)
     return bytes(response_json, encoding = "utf8")
-
+def handlePostData(collection, data):
+    # 文章
+    if data.get('db') == 'article_db':
+        temp = {
+            'title': data.get('title'),
+            'time': data.get('time'),
+            'content': data.get('content')
+        }
+        collection.insert_one(temp)
 def application(environ, start_response):
     status = '200 OK' # HTTP Status  
-    headers = [('Content-Type', 'application/json'),('Access-Control-Allow-Origin', '*')] # HTTP Headers
+    headers = [('Content-Type', 'application/json'),('Access-Control-Allow-Origin', '*'), ('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')] # HTTP Headers
     # 开始响应
     start_response(status, headers)
     # 获取参数 params [data, method]
@@ -59,16 +75,19 @@ def application(environ, start_response):
             db = client[db_name]
             collection = db[collection_name]
             if params[1] == 'POST':
-                pass
+                handlePostData(collection, params[0])
+                json_str_res = '[]'
             if params[1] == 'DELETE':
-                pass
+                temp = collection.find_one({"_id": ObjectId(params[0].get('id'))})
+                collection.delete_one(temp)
+                json_str_res = '[]'
             if params[1] == 'GET':
-                dict_res = collection.find_one()
-                print(dict_res)
-                del dict_res['_id']
+                dict_res = list(collection.find().sort('time', DESCENDING))
                 json_str_res = json_util.dumps(dict_res)
             if params[1] == 'PUT':
                 pass
+            if params[1] == 'OPTIONS':
+                json_str_res = '[]'
             # 关闭连接
             client.close()
             response = json.loads(json_str_res)
