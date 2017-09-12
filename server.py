@@ -3,7 +3,7 @@ from wsgiref.simple_server import make_server
 from spider import Spider
 import json
 import re
-from pymongo import MongoClient, DESCENDING
+from pymongo import MongoClient, DESCENDING, ASCENDING
 from bson import json_util
 from bson.objectid import ObjectId
 
@@ -43,7 +43,7 @@ def getArticle(type):
 def handleData(dict_data):
     response_json = json.dumps(dict_data)
     return bytes(response_json, encoding = "utf8")
-def handlePostData(collection, data):
+def handleJsonData(collection, data, method):
     # 文章
     if data.get('db') == 'article_db':
         temp = {
@@ -51,7 +51,12 @@ def handlePostData(collection, data):
             'time': data.get('time'),
             'content': data.get('content')
         }
+    if method == 'POST':
         collection.insert_one(temp)
+    elif method == 'PUT':
+        orign = collection.find_one({"_id": ObjectId(data.get('id'))})
+        replace = temp
+        collection.update(orign, replace)
 def application(environ, start_response):
     status = '200 OK' # HTTP Status  
     headers = [('Content-Type', 'application/json'),('Access-Control-Allow-Origin', '*'), ('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')] # HTTP Headers
@@ -75,17 +80,18 @@ def application(environ, start_response):
             db = client[db_name]
             collection = db[collection_name]
             if params[1] == 'POST':
-                handlePostData(collection, params[0])
+                handleJsonData(collection, params[0], 'POST')
                 json_str_res = '[]'
             if params[1] == 'DELETE':
                 temp = collection.find_one({"_id": ObjectId(params[0].get('id'))})
                 collection.delete_one(temp)
                 json_str_res = '[]'
             if params[1] == 'GET':
-                dict_res = list(collection.find().sort('time', DESCENDING))
+                dict_res = list(collection.find().sort('time', ASCENDING))
                 json_str_res = json_util.dumps(dict_res)
             if params[1] == 'PUT':
-                pass
+                handleJsonData(collection, params[0], 'PUT')
+                json_str_res = '[]'
             if params[1] == 'OPTIONS':
                 json_str_res = '[]'
             # 关闭连接
