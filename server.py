@@ -20,7 +20,6 @@ def spider(url, method, data = None, headers = None):
 
 def getParams(environ):
     method = environ['REQUEST_METHOD']
-    print(method)
     if method == 'POST' or method == 'PUT':
         request_body_size = int(environ['CONTENT_LENGTH'])
         request_body = environ['wsgi.input'].read(request_body_size)
@@ -87,7 +86,7 @@ def application(environ, start_response):
                 collection.delete_one(temp)
                 json_str_res = '[]'
             if params[1] == 'GET':
-                dict_res = list(collection.find().sort('time', ASCENDING))
+                dict_res = list(collection.find().sort('_id', -1))
                 json_str_res = json_util.dumps(dict_res)
             if params[1] == 'PUT':
                 handleJsonData(collection, params[0], 'PUT')
